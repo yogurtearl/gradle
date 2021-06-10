@@ -35,6 +35,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import static org.apache.commons.io.FilenameUtils.removeExtension;
+import static org.gradle.util.internal.GUtil.safeZipEntryName;
 
 /**
  * Provides a generic transform from a zipped file to an extracted directory.  The extracted directory
@@ -65,7 +66,7 @@ public interface UnzipTransform extends TransformAction<TransformParameters.None
                 if (entry.isDirectory()) {
                     continue;
                 }
-                File outFile = new File(unzipDir, entry.getName());
+                File outFile = new File(unzipDir, safeZipEntryName(entry.getName()));
                 Files.createParentDirs(outFile);
                 try (FileOutputStream outputStream = new FileOutputStream(outFile)) {
                     IOUtils.copyLarge(inputStream, outputStream);
