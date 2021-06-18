@@ -37,10 +37,27 @@ import static org.gradle.util.internal.CollectionUtils.toStringList;
  * <p>
  * Plugins should avoid using this class, as the implementation will be bound to the Groovy. Instead, the object configuration should be  modeled with {@link Action}s, which is language-agnostic.
  * Here's an example pseudocode:
- * <pre>
- *     class MyExtension {
- *         public void configureProperties(Action<? extends MyPropertyContainer> action) {
- *              action.execute(this.myPropertyContainer);
+ * <pre class='autoTested'>
+ *     interface MyOptions {
+ *         RegularFileProperty getOptionsFile()
+ *     }
+ *     abstract class MyExtension {
+ *         private final MyOptions options;
+ *
+ *         @Inject public abstract ObjectFactory getObjectFactory();
+ *
+ *         public MyExtension() {
+ *             this.options = getObjectFactory().newInstance(MyOptions.class);
+ *         }
+ *
+ *         public void options(Action<? extends MyOptions> action) {
+ *              action.execute(options);
+ *         }
+ *     }
+ *     extensions.create("myExtension", MyExtension)
+ *     myExtension {
+ *         options {
+ *             optionsFile = layout.projectDirectory.file("options.properties")
  *         }
  *     }
  * </pre>
