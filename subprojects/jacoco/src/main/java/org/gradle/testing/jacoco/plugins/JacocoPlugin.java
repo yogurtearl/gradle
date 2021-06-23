@@ -50,8 +50,6 @@ import org.gradle.testing.jacoco.tasks.JacocoReport;
 
 import javax.inject.Inject;
 import java.io.File;
-import java.util.HashSet;
-import java.util.Set;
 
 import static org.gradle.api.internal.lambdas.SerializableLambdas.action;
 
@@ -138,24 +136,22 @@ public class JacocoPlugin implements Plugin<Project> {
             javaPluginExtension.getSourceSets().getByName("main").getJava().getSrcDirs()
                 .forEach(f -> transitiveSourcesElements.getOutgoing().artifact(f));
 
-            Set<String> testTasks = new HashSet<>();
-            // TODO: test task is known for java ecosystem. Can we figure what other Test tasks are there in order to wire coverage variants for them?
-            testTasks.add("test");
-            for (String testTaskName : testTasks) {
-                Configuration coverageElements = createVariant(testTaskName + "CoverageElements",
-                    AggregatedJacocoReport.coverageDataAttributes(project));
-                coverageElements.getAttributes().attribute(Attribute.of("testTask", String.class), testTaskName);
-                coverageElements.extendsFrom(implementation);
-                TaskContainer tasks = project.getTasks();
-                coverageElements.getOutgoing().artifact(
-                    tasks.named(testTaskName).map(task -> {
-                        File destinationFile = task.getExtensions().getByType(JacocoTaskExtension.class).getDestinationFile();
+            TaskContainer tasks = project.getTasks();
+            project.afterEvaluate(p -> {
+                for (String taskName : tasks.withType(Test.class).getNames()) {
+                    Configuration coverageElements = createVariant(taskName + "CoverageElements",
+                        AggregatedJacocoReport.coverageDataAttributes(project));
+                    coverageElements.getAttributes().attribute(Attribute.of("testTask", String.class), taskName);
+                    coverageElements.extendsFrom(implementation);
+                    coverageElements.getOutgoing().artifact(tasks.named(taskName).map(t -> {
+                        File destinationFile = t.getExtensions().getByType(JacocoTaskExtension.class).getDestinationFile();
                         if (destinationFile == null) {
                             throw new GradleException(DESTINATION_MUST_BE_NOT_NULL_MESSAGE);
                         }
                         return destinationFile;
                     }));
-            }
+                }
+            });
         });
 
     }
