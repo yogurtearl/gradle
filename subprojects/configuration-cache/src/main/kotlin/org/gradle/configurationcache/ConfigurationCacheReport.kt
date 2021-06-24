@@ -25,6 +25,9 @@ import org.gradle.configurationcache.problems.PropertyTrace
 import org.gradle.configurationcache.problems.buildConsoleSummary
 import org.gradle.configurationcache.problems.firstTypeFrom
 import org.gradle.configurationcache.problems.taskPathFrom
+import org.gradle.initialization.ClassLoaderScopeRegistry
+import org.gradle.internal.service.scopes.Scopes
+import org.gradle.internal.service.scopes.ServiceScope
 
 import java.io.BufferedReader
 import java.io.BufferedWriter
@@ -34,7 +37,10 @@ import java.io.StringWriter
 import java.net.URL
 
 
-class ConfigurationCacheReport {
+@ServiceScope(Scopes.BuildTree::class)
+class ConfigurationCacheReport internal constructor(
+    private val classLoaderScopeRegistry: ClassLoaderScopeRegistry
+) {
 
     companion object {
 
@@ -74,7 +80,7 @@ class ConfigurationCacheReport {
     fun <T> withContextClassLoader(action: () -> T): T {
         val currentThread = Thread.currentThread()
         val previous = currentThread.contextClassLoader
-        currentThread.contextClassLoader = javaClass.classLoader
+        currentThread.contextClassLoader = classLoaderScopeRegistry.coreAndPluginsScope.exportClassLoader
         try {
             return action()
         } finally {
