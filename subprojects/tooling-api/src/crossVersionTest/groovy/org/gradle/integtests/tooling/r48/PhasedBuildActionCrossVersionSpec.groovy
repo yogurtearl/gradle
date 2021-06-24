@@ -313,7 +313,7 @@ class PhasedBuildActionCrossVersionSpec extends ToolingApiSpecification {
 
         then:
         noExceptionThrown()
-        stdout.toString().contains("CONFIGURE SUCCESSFUL")
+        assertHasConfigureSuccessfulLogging()
 
         where:
         description                                        | configuration
@@ -338,7 +338,7 @@ class PhasedBuildActionCrossVersionSpec extends ToolingApiSpecification {
         }
 
         then:
-        stdout.toString().contains("BUILD SUCCESSFUL")
+        assertHasBuildSuccessfulLogging()
         OutputScrapingExecutionResult.from(stdout.toString(), stderr.toString()).assertTasksExecuted(":help")
 
         where:
@@ -366,7 +366,7 @@ class PhasedBuildActionCrossVersionSpec extends ToolingApiSpecification {
         }
 
         then:
-        stdout.toString().contains("BUILD SUCCESSFUL")
+        assertHasBuildSuccessfulLogging()
         OutputScrapingExecutionResult.from(stdout.toString(), stderr.toString()).assertTasksExecuted(":thing")
 
         where:
@@ -395,7 +395,7 @@ class PhasedBuildActionCrossVersionSpec extends ToolingApiSpecification {
 
         then:
         noExceptionThrown()
-        stdout.toString().contains("BUILD SUCCESSFUL")
+        assertHasBuildSuccessfulLogging()
         OutputScrapingExecutionResult.from(stdout.toString(), stderr.toString()).assertTasksExecuted(":thing")
 
         where:

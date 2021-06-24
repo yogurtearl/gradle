@@ -64,7 +64,7 @@ task setup {
 
         then:
         noExceptionThrown()
-        stdout.toString().contains("CONFIGURE SUCCESSFUL")
+        assertHasConfigureSuccessfulLogging()
 
         where:
         description                 | action
@@ -93,7 +93,7 @@ task setup {
 
         then:
         noExceptionThrown()
-        stdout.toString().contains("CONFIGURE SUCCESSFUL")
+        assertHasConfigureSuccessfulLogging()
 
         where:
         description                 | action
