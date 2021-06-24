@@ -48,7 +48,7 @@ public class HttpRedirectVerifierFactory {
         requireNonNull(insecureBaseHost, "insecureBaseHost must not be null");
         requireNonNull(insecureRedirect, "insecureRedirect must not be null");
         if (allowInsecureProtocol) {
-            return NoopHttpRedirectVerifier.instance;
+            return NoopHttpRedirectVerifier.INSTANCE;
         } else {
             // Verify that the base URL is secure now.
             if (baseHost != null && !GUtil.isSecureUrl(baseHost)) {
@@ -66,7 +66,7 @@ public class HttpRedirectVerifierFactory {
     }
 
     private static class NoopHttpRedirectVerifier implements HttpRedirectVerifier {
-        private static NoopHttpRedirectVerifier instance = new NoopHttpRedirectVerifier();
+        private static final NoopHttpRedirectVerifier INSTANCE = new NoopHttpRedirectVerifier();
 
         @Override
         public void validateRedirects(Collection<URI> redirectLocations) {

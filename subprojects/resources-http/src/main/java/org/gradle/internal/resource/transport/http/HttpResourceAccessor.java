@@ -48,17 +48,6 @@ public class HttpResourceAccessor implements ExternalResourceAccessor {
         return null;
     }
 
-    /**
-     * Same as #getResource except that it always gives access to the response body,
-     * irrespective of the returned HTTP status code. Never returns {@code null}.
-     */
-    public HttpResponseResource getRawResource(final URI uri, boolean revalidate) {
-        String location = uri.toString();
-        LOGGER.debug("Constructing external resource: {}", location);
-        HttpClientResponse response = http.performRawGet(location, revalidate);
-        return wrapResponse(uri, response);
-    }
-
     @Override
     public ExternalResourceMetaData getMetaData(URI uri, boolean revalidate) {
         String location = uri.toString();

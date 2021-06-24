@@ -19,10 +19,13 @@ package org.gradle.caching.internal.controller.service;
 import org.gradle.caching.BuildCacheEntryReader;
 import org.gradle.caching.BuildCacheKey;
 import org.gradle.caching.BuildCacheService;
+import org.gradle.caching.BuildCacheService.StoreOutcome;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 
 public class BaseBuildCacheServiceHandle implements BuildCacheServiceHandle {
 
@@ -63,22 +66,23 @@ public class BaseBuildCacheServiceHandle implements BuildCacheServiceHandle {
     }
 
     @Override
-    public final void load(BuildCacheKey key, LoadTarget loadTarget) {
+    public final boolean load(BuildCacheKey key, LoadTarget loadTarget) {
         String description = "Load entry " + key.getDisplayName() + " from " + role.getDisplayName() + " build cache";
         LOGGER.debug(description);
         try {
-            loadInner(description, key, loadTarget);
+            return loadInner(description, key, loadTarget);
         } catch (Exception e) {
             failure("load", "from", key, e);
+            return false;
         }
     }
 
-    protected void loadInner(String description, BuildCacheKey key, LoadTarget loadTarget) {
-        service.load(key, loadTarget);
+    protected boolean loadInner(String description, BuildCacheKey key, LoadTarget loadTarget) {
+        return service.load(key, loadTarget);
     }
 
-    protected void loadInner(BuildCacheKey key, BuildCacheEntryReader entryReader) {
-        service.load(key, entryReader);
+    protected boolean loadInner(BuildCacheKey key, BuildCacheEntryReader entryReader) {
+        return service.load(key, entryReader);
     }
 
     @Override
@@ -87,18 +91,19 @@ public class BaseBuildCacheServiceHandle implements BuildCacheServiceHandle {
     }
 
     @Override
-    public final void store(BuildCacheKey key, StoreTarget storeTarget) {
+    public final StoreOutcome store(BuildCacheKey key, StoreTarget storeTarget) {
         String description = "Store entry " + key.getDisplayName() + " in " + role.getDisplayName() + " build cache";
         LOGGER.debug(description);
         try {
-            storeInner(description, key, storeTarget);
+            return storeInner(description, key, storeTarget);
         } catch (Exception e) {
             failure("store", "in", key, e);
+            return null;
         }
     }
 
-    protected void storeInner(String description, BuildCacheKey key, StoreTarget storeTarget) {
-        service.store(key, storeTarget);
+    protected StoreOutcome storeInner(String description, BuildCacheKey key, StoreTarget storeTarget) {
+        return service.maybeStore(key, storeTarget);
     }
 
     private void failure(String verb, String preposition, BuildCacheKey key, Throwable e) {
@@ -111,7 +116,7 @@ public class BaseBuildCacheServiceHandle implements BuildCacheServiceHandle {
             if (logStackTraces) {
                 LOGGER.warn(description, e);
             } else {
-                LOGGER.warn(description + ": " + e.getMessage());
+                LOGGER.warn("{}: {}", description, noTraceRender(e));
             }
         }
     }
@@ -128,9 +133,15 @@ public class BaseBuildCacheServiceHandle implements BuildCacheServiceHandle {
             if (logStackTraces) {
                 LOGGER.warn("Error closing {} build cache: ", role.getDisplayName(), e);
             } else {
-                LOGGER.warn("Error closing {} build cache: {}", role.getDisplayName(), e.getMessage());
+                LOGGER.warn("Error closing {} build cache: {}", role.getDisplayName(), noTraceRender(e));
             }
         }
+    }
+
+    private static String noTraceRender(Throwable e) {
+        StringWriter stringWriter = new StringWriter();
+        ExceptionChainNoTraceRenderer.render(e, "", new PrintWriter(stringWriter));
+        return stringWriter.toString();
     }
 }
 

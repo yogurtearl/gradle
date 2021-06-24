@@ -16,8 +16,13 @@
 
 package org.gradle.caching;
 
+import com.google.common.io.ByteStreams;
+import org.gradle.api.Incubating;
+
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
 
 /**
  * A reader for build cache entries.
@@ -32,6 +37,25 @@ public interface BuildCacheEntryReader {
      *
      * @param input input stream that contains the build cache entry
      * @throws IOException when an I/O error occurs when reading the cache entry from the given input stream
+     * @deprecated use {@link #openFileReference()} instead
      */
-    void readFrom(InputStream input) throws IOException;
+    @Deprecated
+    default void readFrom(InputStream input) throws IOException {
+        try (
+            InputStream in = input;
+            BuildCacheEntryFileReference fileReference = openFileReference();
+            OutputStream out = Files.newOutputStream(fileReference.getFile())
+        ) {
+            ByteStreams.copy(in, out);
+        }
+    }
+
+    /**
+     * Opens access to a file that can be used to write the entry to.
+     *
+     * @return an entry file reference
+     * @since 7.2
+     */
+    @Incubating
+    BuildCacheEntryFileReference openFileReference();
 }

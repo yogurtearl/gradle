@@ -16,7 +16,7 @@
 
 package org.gradle.internal.resource.transport.http
 
-import org.apache.http.client.methods.HttpGet
+
 import org.apache.http.client.methods.HttpRequestBase
 import org.apache.http.impl.client.CloseableHttpClient
 import org.apache.http.ssl.SSLContexts
@@ -25,18 +25,19 @@ import org.gradle.util.SetSystemProperties
 import org.junit.Rule
 
 class HttpClientHelperTest extends AbstractHttpClientTest {
-    @Rule SetSystemProperties sysProp = new SetSystemProperties()
+    @Rule
+    SetSystemProperties sysProp = new SetSystemProperties()
 
     def "throws HttpRequestException if an IO error occurs during a request"() {
-        def client = new HttpClientHelper(new DocumentationRegistry(), httpSettings) {
-            @Override
+        def client = new HttpClientHelper(new DocumentationRegistry(), httpSettings, HttpClientHelper::createClient) {
+
             protected HttpClientResponse executeGetOrHead(HttpRequestBase method) {
                 throw new IOException("ouch")
             }
         }
 
         when:
-        client.performRequest(new HttpGet("http://gradle.org"), false)
+        client.performGet("http://gradle.org", false)
 
         then:
         HttpRequestException e = thrown()
@@ -44,13 +45,13 @@ class HttpClientHelperTest extends AbstractHttpClientTest {
     }
 
     def "response is closed if an error occurs during a request"() {
-        def client = new HttpClientHelper(new DocumentationRegistry(), httpSettings)
+        def client = new HttpClientHelper(new DocumentationRegistry(), httpSettings, HttpClientHelper::createClient)
         CloseableHttpClient httpClient = Mock()
         client.client = httpClient
         MockedHttpResponse mockedHttpResponse = mockedHttpResponse()
 
         when:
-        client.performRequest(new HttpGet("http://gradle.org"), false)
+        client.performGet("http://gradle.org", false)
 
         then:
         interaction {
@@ -60,16 +61,15 @@ class HttpClientHelperTest extends AbstractHttpClientTest {
     }
 
     def "request with revalidate adds Cache-Control header"() {
-        def client = new HttpClientHelper(new DocumentationRegistry(), httpSettings) {
-            @Override
+        def client = new HttpClientHelper(new DocumentationRegistry(), httpSettings, HttpClientHelper::createClient) {
+
             protected HttpClientResponse executeGetOrHead(HttpRequestBase method) {
                 return null
             }
         }
 
         when:
-        def request = new HttpGet("http://gradle.org")
-        client.performRequest(request, true)
+        client.performGet("http://gradle.org", true)
 
         then:
         request.getHeaders("Cache-Control")[0].value == "max-age=0"
@@ -80,7 +80,7 @@ class HttpClientHelperTest extends AbstractHttpClientTest {
         def uri = new URI("https", "admin:password", "foo.example", 80, null, null, null)
 
         when:
-        def strippedUri = HttpClientHelper.stripUserCredentials(uri)
+        def strippedUri = BaseHttpClientHelper.stripUserCredentials(uri)
 
         then:
         strippedUri.userInfo == null

@@ -37,8 +37,6 @@ import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.client.utils.DateUtils;
 import org.apache.http.config.RegistryBuilder;
-import org.apache.http.config.SocketConfig;
-import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.conn.util.PublicSuffixMatcher;
 import org.apache.http.conn.util.PublicSuffixMatcherLoader;
 import org.apache.http.cookie.CookieSpecProvider;
@@ -54,6 +52,7 @@ import org.apache.http.impl.cookie.DefaultCookieSpecProvider;
 import org.apache.http.impl.cookie.IgnoreSpecProvider;
 import org.apache.http.impl.cookie.NetscapeDraftSpecProvider;
 import org.apache.http.impl.cookie.RFC6265CookieSpecProvider;
+import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.protocol.HttpCoreContext;
 import org.gradle.api.JavaVersion;
@@ -135,6 +134,14 @@ public class HttpClientConfigurer {
     }
 
     public void configure(HttpClientBuilder builder) {
+        configure(HttpClientBuilderAdapter.of(builder));
+    }
+
+    public void configure(HttpAsyncClientBuilder builder) {
+        configure(HttpClientBuilderAdapter.of(builder));
+    }
+
+    public void configure(HttpClientBuilderAdapter builder) {
         SystemDefaultCredentialsProvider credentialsProvider = new SystemDefaultCredentialsProvider();
         configureSslSocketConnectionFactory(builder, httpSettings.getSslContextFactory(), httpSettings.getHostnameVerifier());
         configureAuthSchemeRegistry(builder);
@@ -148,13 +155,15 @@ public class HttpClientConfigurer {
         builder.setDefaultCredentialsProvider(credentialsProvider);
         builder.setMaxConnTotal(MAX_HTTP_CONNECTIONS);
         builder.setMaxConnPerRoute(MAX_HTTP_CONNECTIONS);
+
+        builder.finish();
     }
 
-    private void configureSslSocketConnectionFactory(HttpClientBuilder builder, SslContextFactory sslContextFactory, HostnameVerifier hostnameVerifier) {
-        builder.setSSLSocketFactory(new SSLConnectionSocketFactory(sslContextFactory.createSslContext(), sslProtocols, null, hostnameVerifier));
+    private void configureSslSocketConnectionFactory(HttpClientBuilderAdapter builder, SslContextFactory sslContextFactory, HostnameVerifier hostnameVerifier) {
+        builder.setSsl(sslContextFactory.createSslContext(), sslProtocols, hostnameVerifier);
     }
 
-    private void configureAuthSchemeRegistry(HttpClientBuilder builder) {
+    private void configureAuthSchemeRegistry(HttpClientBuilderAdapter builder) {
         builder.setDefaultAuthSchemeRegistry(RegistryBuilder.<AuthSchemeProvider>create()
             .register(AuthSchemes.BASIC, new BasicSchemeFactory())
             .register(AuthSchemes.DIGEST, new DigestSchemeFactory())
@@ -166,7 +175,7 @@ public class HttpClientConfigurer {
         );
     }
 
-    private void configureCredentials(HttpClientBuilder builder, CredentialsProvider credentialsProvider, Collection<Authentication> authentications) {
+    private void configureCredentials(HttpClientBuilderAdapter builder, CredentialsProvider credentialsProvider, Collection<Authentication> authentications) {
         if (authentications.size() > 0) {
             useCredentials(credentialsProvider, authentications);
 
@@ -184,7 +193,7 @@ public class HttpClientConfigurer {
         return new BasicScheme();
     }
 
-    private void configureProxy(HttpClientBuilder builder, CredentialsProvider credentialsProvider, HttpSettings httpSettings) {
+    private void configureProxy(HttpClientBuilderAdapter builder, CredentialsProvider credentialsProvider, HttpSettings httpSettings) {
         HttpProxySettings.HttpProxy httpProxy = httpSettings.getProxySettings().getProxy();
         HttpProxySettings.HttpProxy httpsProxy = httpSettings.getSecureProxySettings().getProxy();
 
@@ -252,11 +261,11 @@ public class HttpClientConfigurer {
         });
     }
 
-    public void configureUserAgent(HttpClientBuilder builder) {
+    public void configureUserAgent(HttpClientBuilderAdapter builder) {
         builder.setUserAgent(UriTextResource.getUserAgentString());
     }
 
-    private void configureCookieSpecRegistry(HttpClientBuilder builder) {
+    private void configureCookieSpecRegistry(HttpClientBuilderAdapter builder) {
         PublicSuffixMatcher publicSuffixMatcher = PublicSuffixMatcherLoader.getDefault();
         builder.setPublicSuffixMatcher(publicSuffixMatcher);
         // Add more data patterns to the default configuration to work around https://github.com/gradle/gradle/issues/1596
@@ -282,7 +291,7 @@ public class HttpClientConfigurer {
         );
     }
 
-    private void configureRequestConfig(HttpClientBuilder builder) {
+    private void configureRequestConfig(HttpClientBuilderAdapter builder) {
         HttpTimeoutSettings timeoutSettings = httpSettings.getTimeoutSettings();
         RequestConfig config = RequestConfig.custom()
             .setConnectTimeout(timeoutSettings.getConnectionTimeoutMs())
@@ -292,12 +301,12 @@ public class HttpClientConfigurer {
         builder.setDefaultRequestConfig(config);
     }
 
-    private void configureSocketConfig(HttpClientBuilder builder) {
+    private void configureSocketConfig(HttpClientBuilderAdapter builder) {
         HttpTimeoutSettings timeoutSettings = httpSettings.getTimeoutSettings();
-        builder.setDefaultSocketConfig(SocketConfig.custom().setSoTimeout(timeoutSettings.getSocketTimeoutMs()).setSoKeepAlive(true).build());
+        builder.setDefaultSocketConfig(timeoutSettings.getSocketTimeoutMs(), true);
     }
 
-    private void configureRedirectStrategy(HttpClientBuilder builder) {
+    private void configureRedirectStrategy(HttpClientBuilderAdapter builder) {
         if (httpSettings.getMaxRedirects() > 0) {
             builder.setRedirectStrategy(new RedirectVerifyingStrategyDecorator(getBaseRedirectStrategy(), httpSettings.getRedirectVerifier()));
         } else {

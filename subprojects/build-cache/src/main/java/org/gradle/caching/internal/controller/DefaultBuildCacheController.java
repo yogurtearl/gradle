@@ -111,9 +111,9 @@ public class DefaultBuildCacheController implements BuildCacheController {
         if (remote.canLoad()) {
             tmp.withTempFile(command.getKey(), file -> {
                 LoadTarget loadTarget = new LoadTarget(file);
-                remote.load(command.getKey(), loadTarget);
+                boolean loaded = remote.load(command.getKey(), loadTarget);
 
-                if (loadTarget.isLoaded()) {
+                if (loaded) {
                     try {
                         unpack.execute(file);
                     } catch (Exception e) {

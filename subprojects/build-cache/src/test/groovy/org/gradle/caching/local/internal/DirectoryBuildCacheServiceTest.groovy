@@ -18,6 +18,7 @@ package org.gradle.caching.local.internal
 
 import org.gradle.api.internal.file.temp.DefaultTemporaryFileProvider
 import org.gradle.cache.PersistentCache
+import org.gradle.caching.BuildCacheEntryFileReference
 import org.gradle.caching.BuildCacheEntryReader
 import org.gradle.caching.BuildCacheEntryWriter
 import org.gradle.caching.BuildCacheKey
@@ -29,6 +30,8 @@ import org.gradle.util.TestUtil
 import org.gradle.util.UsesNativeServices
 import org.junit.Rule
 import spock.lang.Specification
+
+import java.nio.file.Path
 
 @UsesNativeServices
 @CleanupTestDirectory
@@ -46,36 +49,6 @@ class DirectoryBuildCacheServiceTest extends Specification {
     def hashCode = "1234abcd"
     def key = Mock(BuildCacheKey) {
         getHashCode() >> hashCode
-    }
-
-    def "does not store partial result"() {
-        when:
-        service.store(key, new BuildCacheEntryWriter() {
-            @Override
-            void writeTo(OutputStream output) throws IOException {
-                // Check that partial result file is created inside the cache directory
-                def cacheDirFiles = cacheDir.listFiles()
-                assert cacheDirFiles.length == 1
-
-                def partialCacheFile = cacheDirFiles[0]
-                assert partialCacheFile.name.startsWith(hashCode)
-                assert partialCacheFile.name.endsWith(BuildCacheTempFileStore.PARTIAL_FILE_SUFFIX)
-
-                output << "abcd"
-                throw new RuntimeException("Simulated write error")
-            }
-
-            @Override
-            long getSize() {
-                return 100
-            }
-        })
-        then:
-        def ex = thrown RuntimeException
-        ex.message == "Simulated write error"
-        cacheDir.listFiles() as List == []
-        1 * key.getHashCode() >> hashCode
-        0 * fileAccessTracker.markAccessed(_)
     }
 
     def "marks file accessed when storing and loading locally"() {
@@ -106,15 +79,26 @@ class DirectoryBuildCacheServiceTest extends Specification {
         File cachedFile = null
 
         when:
-        service.store(key, new BuildCacheEntryWriter() {
+        def storeFile = temporaryFolder.file("entry") << "foo"
+        service.maybeStore(key, new BuildCacheEntryWriter() {
             @Override
-            void writeTo(OutputStream output) throws IOException {
-                output.write("foo".getBytes())
+            BuildCacheEntryFileReference openFileReference() {
+                new BuildCacheEntryFileReference() {
+                    @Override
+                    Path getFile() {
+                        storeFile.toPath()
+                    }
+
+                    @Override
+                    void close() {
+
+                    }
+                }
             }
 
             @Override
             long getSize() {
-                return 100
+                storeFile.size()
             }
         })
 
@@ -123,14 +107,26 @@ class DirectoryBuildCacheServiceTest extends Specification {
         cachedFile.absolutePath.startsWith(cacheDir.absolutePath)
 
         when:
+        def file = temporaryFolder.createFile("tmp")
         def loaded = service.load(key, new BuildCacheEntryReader() {
             @Override
-            void readFrom(InputStream input) throws IOException {
-                assert input.text == "foo"
+            BuildCacheEntryFileReference openFileReference() {
+                new BuildCacheEntryFileReference() {
+                    @Override
+                    Path getFile() {
+                        file.toPath()
+                    }
+
+                    @Override
+                    void close() {
+
+                    }
+                }
             }
         })
 
         then:
+        file.text == "foo"
         1 * fileAccessTracker.markAccessed(cachedFile)
         loaded
     }

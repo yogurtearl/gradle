@@ -23,6 +23,7 @@ import javax.net.ssl.HostnameVerifier;
 import java.util.Collection;
 
 public interface HttpSettings {
+
     HttpProxySettings getProxySettings();
 
     HttpProxySettings getSecureProxySettings();

@@ -27,7 +27,7 @@ import org.gradle.caching.http.HttpBuildCacheCredentials;
 import org.gradle.internal.authentication.DefaultBasicAuthentication;
 import org.gradle.internal.deprecation.Documentation;
 import org.gradle.internal.resource.transport.http.DefaultHttpSettings;
-import org.gradle.internal.resource.transport.http.HttpClientHelper;
+import org.gradle.internal.resource.transport.http.HttpAsyncClientHelper;
 import org.gradle.internal.resource.transport.http.HttpSettings;
 import org.gradle.internal.resource.transport.http.SslContextFactory;
 import org.gradle.internal.verifier.HttpRedirectVerifier;
@@ -48,10 +48,10 @@ public class DefaultHttpBuildCacheServiceFactory implements BuildCacheServiceFac
 
     private final SslContextFactory sslContextFactory;
     private final HttpBuildCacheRequestCustomizer requestCustomizer;
-    private final HttpClientHelper.Factory httpClientHelperFactory;
+    private final HttpAsyncClientHelper.Factory httpClientHelperFactory;
 
     @Inject
-    public DefaultHttpBuildCacheServiceFactory(SslContextFactory sslContextFactory, HttpBuildCacheRequestCustomizer requestCustomizer, HttpClientHelper.Factory httpClientHelperFactory) {
+    public DefaultHttpBuildCacheServiceFactory(SslContextFactory sslContextFactory, HttpBuildCacheRequestCustomizer requestCustomizer, HttpAsyncClientHelper.Factory httpClientHelperFactory) {
         this.sslContextFactory = sslContextFactory;
         this.requestCustomizer = requestCustomizer;
         this.httpClientHelperFactory = httpClientHelperFactory;
@@ -96,7 +96,7 @@ public class DefaultHttpBuildCacheServiceFactory implements BuildCacheServiceFac
         } else {
             builder.withSslContextFactory(sslContextFactory);
         }
-        HttpClientHelper httpClientHelper = httpClientHelperFactory.create(builder.build());
+        HttpAsyncClientHelper httpClientHelper = httpClientHelperFactory.create(builder.build());
 
         describer.type("HTTP")
             .config("url", noUserInfoUrl.toASCIIString())

@@ -40,9 +40,9 @@ class CookieHeaderTest extends Specification {
     HttpSettings settings = DefaultHttpSettings.builder()
         .withAuthenticationSettings([])
         .withSslContextFactory(sslContextFactory)
-        .withRedirectVerifier({})
+        .withHttpsVerifier({})
         .build()
-    HttpClientHelper client = new HttpClientHelper(new DocumentationRegistry(), settings)
+    HttpClientHelper client = new HttpClientHelper(new DocumentationRegistry(), settings, HttpClientHelper::createClient)
 
     def "cookie header with attributes #attributes can be parsed"() {
         httpServer.start()

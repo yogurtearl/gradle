@@ -16,10 +16,10 @@
 
 package org.gradle.caching.local.internal;
 
-import com.google.common.io.Closer;
 import org.gradle.api.Action;
 import org.gradle.api.UncheckedIOException;
 import org.gradle.cache.PersistentCache;
+import org.gradle.caching.BuildCacheEntryFileReference;
 import org.gradle.caching.BuildCacheEntryReader;
 import org.gradle.caching.BuildCacheEntryWriter;
 import org.gradle.caching.BuildCacheException;
@@ -33,9 +33,8 @@ import org.gradle.util.internal.GFileUtils;
 
 import javax.annotation.Nonnull;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -66,20 +65,15 @@ public class DirectoryBuildCacheService implements LocalBuildCacheService, Build
 
         @Override
         public void execute(@Nonnull File file) {
-            try {
-                Closer closer = Closer.create();
-                FileInputStream stream = closer.register(new FileInputStream(file));
-                try {
-                    reader.readFrom(stream);
-                    loaded = true;
-                } finally {
-                    closer.close();
-                }
+            try (BuildCacheEntryFileReference fileRef = reader.openFileReference()) {
+                Files.copy(file.toPath(), fileRef.getFile());
+                loaded = true;
             } catch (IOException ex) {
                 throw new UncheckedIOException(ex);
             }
         }
     }
+
 
     @Override
     public boolean load(final BuildCacheKey key, final BuildCacheEntryReader reader) throws BuildCacheException {
@@ -128,19 +122,12 @@ public class DirectoryBuildCacheService implements LocalBuildCacheService, Build
     }
 
     @Override
-    public void store(final BuildCacheKey key, final BuildCacheEntryWriter result) throws BuildCacheException {
+    public StoreOutcome maybeStore(BuildCacheKey key, BuildCacheEntryWriter writer) throws BuildCacheException {
         tempFileStore.withTempFile(key, new Action<File>() {
             @Override
             public void execute(@Nonnull File file) {
-                try {
-                    Closer closer = Closer.create();
-                    try {
-                        result.writeTo(closer.register(new FileOutputStream(file)));
-                    } catch (Exception e) {
-                        throw closer.rethrow(e);
-                    } finally {
-                        closer.close();
-                    }
+                try (BuildCacheEntryFileReference fileRef = writer.openFileReference()) {
+                    Files.copy(fileRef.getFile(), file.toPath());
                 } catch (IOException ex) {
                     throw UncheckedException.throwAsUncheckedException(ex);
                 }
@@ -148,6 +135,7 @@ public class DirectoryBuildCacheService implements LocalBuildCacheService, Build
                 storeLocally(key, file);
             }
         });
+        return StoreOutcome.STORED;
     }
 
     @Override

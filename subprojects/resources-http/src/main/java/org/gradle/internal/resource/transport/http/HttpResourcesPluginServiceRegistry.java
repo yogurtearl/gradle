@@ -48,6 +48,10 @@ public class HttpResourcesPluginServiceRegistry extends AbstractPluginServiceReg
             return HttpClientHelper.Factory.createFactory(documentationRegistry);
         }
 
+        HttpAsyncClientHelper.Factory createHttpAsyncClientHelperFactory(DocumentationRegistry documentationRegistry) {
+            return HttpAsyncClientHelper.Factory.createFactory(documentationRegistry);
+        }
+
         ResourceConnectorFactory createHttpConnectorFactory(SslContextFactory sslContextFactory, HttpClientHelper.Factory httpClientHelperFactory) {
             return new HttpConnectorFactory(sslContextFactory, httpClientHelperFactory);
         }

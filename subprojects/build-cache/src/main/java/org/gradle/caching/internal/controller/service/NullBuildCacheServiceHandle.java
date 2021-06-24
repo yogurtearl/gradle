@@ -37,7 +37,7 @@ public class NullBuildCacheServiceHandle implements BuildCacheServiceHandle {
     }
 
     @Override
-    public void load(BuildCacheKey key, LoadTarget loadTarget) {
+    public boolean load(BuildCacheKey key, LoadTarget loadTarget) {
         throw new UnsupportedOperationException();
     }
 
@@ -47,7 +47,7 @@ public class NullBuildCacheServiceHandle implements BuildCacheServiceHandle {
     }
 
     @Override
-    public void store(BuildCacheKey key, StoreTarget storeTarget) {
+    public BuildCacheService.StoreOutcome store(BuildCacheKey key, StoreTarget storeTarget) {
         throw new UnsupportedOperationException();
     }
 

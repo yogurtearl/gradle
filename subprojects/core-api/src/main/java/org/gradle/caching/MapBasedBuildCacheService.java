@@ -16,10 +16,8 @@
 
 package org.gradle.caching;
 
-import org.gradle.internal.io.StreamByteBuffer;
-
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.concurrent.ConcurrentMap;
 
 /**
@@ -40,8 +38,8 @@ public class MapBasedBuildCacheService implements BuildCacheService {
         if (bytes == null) {
             return false;
         }
-        try {
-            reader.readFrom(new ByteArrayInputStream(bytes));
+        try (BuildCacheEntryFileReference fileReference = reader.openFileReference()) {
+            Files.write(fileReference.getFile(), bytes);
         } catch (IOException e) {
             throw new BuildCacheException("loading " + key, e);
         }
@@ -49,14 +47,14 @@ public class MapBasedBuildCacheService implements BuildCacheService {
     }
 
     @Override
-    public void store(BuildCacheKey key, BuildCacheEntryWriter output) throws BuildCacheException {
-        StreamByteBuffer buffer = new StreamByteBuffer();
-        try {
-            output.writeTo(buffer.getOutputStream());
+    public StoreOutcome maybeStore(BuildCacheKey key, BuildCacheEntryWriter writer) throws BuildCacheException {
+        try (BuildCacheEntryFileReference fileReference = writer.openFileReference()) {
+            delegate.put(key.getHashCode(), Files.readAllBytes(fileReference.getFile()));
         } catch (IOException e) {
             throw new BuildCacheException("storing " + key, e);
         }
-        delegate.put(key.getHashCode(), buffer.readAsByteArray());
+
+        return StoreOutcome.STORED;
     }
 
     @Override

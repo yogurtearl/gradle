@@ -40,12 +40,12 @@ class DeprecatedTLSVersionTest extends Specification {
     HttpSettings settings = DefaultHttpSettings.builder()
         .withAuthenticationSettings([])
         .withSslContextFactory { keyStore.asSSLContext() }
-        .withRedirectVerifier({})
+        .withHttpsVerifier({})
         .build()
 
     def "server that only supports deprecated TLS versions"() {
         given:
-        HttpClientHelper client = new HttpClientHelper(new DocumentationRegistry(), settings)
+        HttpClientHelper client = new HttpClientHelper(new DocumentationRegistry(), settings, HttpClientHelper::createClient)
         // Only support older TLS versions
         server.configure(keyStore) { it -> DEPRECATED_TLS_VERSIONS.contains(it) }
         server.start()
@@ -69,7 +69,7 @@ class DeprecatedTLSVersionTest extends Specification {
 
     def "server that only supports current TLS versions"() {
         given:
-        HttpClientHelper client = new HttpClientHelper(new DocumentationRegistry(), settings)
+        HttpClientHelper client = new HttpClientHelper(new DocumentationRegistry(), settings, HttpClientHelper::createClient)
         // Only support modern TLS versions
         server.configure(keyStore) { it -> MODERN_TLS_VERSIONS.contains(it) }
         server.start()

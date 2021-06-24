@@ -16,8 +16,13 @@
 
 package org.gradle.caching;
 
+import com.google.common.io.ByteStreams;
+import org.gradle.api.Incubating;
+
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.Files;
 
 /**
  * Writer to serialize a build cache entry.
@@ -32,8 +37,18 @@ public interface BuildCacheEntryWriter {
      *
      * @param output output stream to write build cache entry to
      * @throws IOException when an I/O error occurs when writing the cache entry to the given output stream
+     * @deprecated use {@link #openFileReference()} instead
      */
-    void writeTo(OutputStream output) throws IOException;
+    @Deprecated
+    default void writeTo(OutputStream output) throws IOException {
+        try (
+            OutputStream out = output;
+            BuildCacheEntryFileReference fileReference = openFileReference();
+            InputStream input = Files.newInputStream(fileReference.getFile())
+        ) {
+            ByteStreams.copy(input, out);
+        }
+    }
 
     /**
      * Returns the size of the build cache entry to be written.
@@ -42,4 +57,14 @@ public interface BuildCacheEntryWriter {
      * @since 4.1
      */
     long getSize();
+
+    /**
+     * Opens access to a file that can be used to read the entry from.
+     *
+     * @return an entry file reference
+     * @since 7.2
+     */
+    @Incubating
+    BuildCacheEntryFileReference openFileReference();
+
 }

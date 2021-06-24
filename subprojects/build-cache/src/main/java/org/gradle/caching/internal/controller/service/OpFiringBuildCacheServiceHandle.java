@@ -16,21 +16,22 @@
 
 package org.gradle.caching.internal.controller.service;
 
+import org.gradle.caching.BuildCacheEntryFileReference;
 import org.gradle.caching.BuildCacheEntryReader;
 import org.gradle.caching.BuildCacheKey;
 import org.gradle.caching.BuildCacheService;
+import org.gradle.caching.BuildCacheService.StoreOutcome;
 import org.gradle.caching.internal.controller.operations.LoadOperationDetails;
 import org.gradle.caching.internal.controller.operations.LoadOperationHitResult;
 import org.gradle.caching.internal.controller.operations.LoadOperationMissResult;
 import org.gradle.caching.internal.controller.operations.StoreOperationDetails;
 import org.gradle.caching.internal.controller.operations.StoreOperationResult;
 import org.gradle.internal.operations.BuildOperationContext;
-import org.gradle.internal.operations.BuildOperationExecutor;
-import org.gradle.internal.operations.RunnableBuildOperation;
 import org.gradle.internal.operations.BuildOperationDescriptor;
+import org.gradle.internal.operations.BuildOperationExecutor;
+import org.gradle.internal.operations.CallableBuildOperation;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.nio.file.Path;
 
 public class OpFiringBuildCacheServiceHandle extends BaseBuildCacheServiceHandle {
 
@@ -42,16 +43,17 @@ public class OpFiringBuildCacheServiceHandle extends BaseBuildCacheServiceHandle
     }
 
     @Override
-    protected void loadInner(final String description, final BuildCacheKey key, final LoadTarget loadTarget) {
-        buildOperationExecutor.run(new RunnableBuildOperation() {
+    protected boolean loadInner(final String description, final BuildCacheKey key, final LoadTarget loadTarget) {
+        return buildOperationExecutor.call(new CallableBuildOperation<Boolean>() {
             @Override
-            public void run(BuildOperationContext context) {
-                loadInner(key, new OpFiringEntryReader(loadTarget));
+            public Boolean call(BuildOperationContext context) {
+                boolean loaded = OpFiringBuildCacheServiceHandle.super.loadInner(key, new OpFiringEntryReader(loadTarget));
                 context.setResult(
-                    loadTarget.isLoaded()
-                        ? new LoadOperationHitResult(loadTarget.getLoadedSize())
+                    loaded
+                        ? new LoadOperationHitResult(loadTarget.file.length())
                         : LoadOperationMissResult.INSTANCE
                 );
+                return loaded;
             }
 
             @Override
@@ -64,12 +66,19 @@ public class OpFiringBuildCacheServiceHandle extends BaseBuildCacheServiceHandle
     }
 
     @Override
-    protected void storeInner(final String description, final BuildCacheKey key, final StoreTarget storeTarget) {
-        buildOperationExecutor.run(new RunnableBuildOperation() {
+    protected StoreOutcome storeInner(final String description, final BuildCacheKey key, final StoreTarget storeTarget) {
+        return buildOperationExecutor.call(new CallableBuildOperation<StoreOutcome>() {
             @Override
-            public void run(BuildOperationContext context) {
-                OpFiringBuildCacheServiceHandle.super.storeInner(description, key, storeTarget);
-                context.setResult(storeTarget.isStored() ? StoreOperationResult.STORED : StoreOperationResult.NOT_STORED);
+            public StoreOutcome call(BuildOperationContext context) {
+                StoreOutcome storeOutcome = OpFiringBuildCacheServiceHandle.super.storeInner(description, key, storeTarget);
+                boolean stored = storeOutcome == StoreOutcome.STORED || (isUnknown(storeOutcome) && storeTarget.isStored());
+                context.setResult(stored ? StoreOperationResult.STORED : StoreOperationResult.NOT_STORED);
+                return storeOutcome;
+            }
+
+            @SuppressWarnings("deprecation")
+            private boolean isUnknown(StoreOutcome storeOutcome) {
+                return storeOutcome == StoreOutcome.UNKNOWN;
             }
 
             @Override
@@ -90,42 +99,23 @@ public class OpFiringBuildCacheServiceHandle extends BaseBuildCacheServiceHandle
         }
 
         @Override
-        public void readFrom(final InputStream input) throws IOException {
-            try {
-                buildOperationExecutor.run(new RunnableBuildOperation() {
-                    @Override
-                    public void run(BuildOperationContext context) {
-                        try {
-                            delegate.readFrom(input);
-                        } catch (IOException e) {
-                            throw new UncheckedWrapper(e);
-                        }
-                    }
+        public BuildCacheEntryFileReference openFileReference() {
+            BuildCacheEntryFileReference fileReference = delegate.openFileReference();
+            BuildOperationContext operationContext = buildOperationExecutor.start(BuildOperationDescriptor.displayName("Download from remote build cache")
+                .progressDisplayName("Downloading"));
+            return new BuildCacheEntryFileReference() {
+                @Override
+                public Path getFile() {
+                    return fileReference.getFile();
+                }
 
-                    @Override
-                    public BuildOperationDescriptor.Builder description() {
-                        return BuildOperationDescriptor.displayName("Download from remote build cache")
-                            .progressDisplayName("Downloading");
-                    }
-                });
-            } catch (UncheckedWrapper uncheckedWrapper) {
-                throw uncheckedWrapper.getIOException();
-            }
+                @Override
+                public void close() {
+                    operationContext.setResult(null);
+                }
+            };
         }
+
     }
 
-    private static class UncheckedWrapper extends RuntimeException {
-        UncheckedWrapper(IOException cause) {
-            super(cause);
-        }
-
-        @Override
-        public synchronized Throwable fillInStackTrace() {
-            return this;
-        }
-
-        IOException getIOException() {
-            return (IOException) getCause();
-        }
-    }
 }
