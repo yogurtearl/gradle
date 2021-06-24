@@ -22,11 +22,15 @@ import org.gradle.api.file.SourceDirectorySet
 import org.gradle.api.initialization.Settings
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.provider.Provider
+import org.gradle.api.tasks.ClasspathNormalizer
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.TaskProvider
+import org.gradle.internal.fingerprint.classpath.ClasspathFingerprinter
 
 
 import org.gradle.kotlin.dsl.*
+import org.gradle.kotlin.dsl.precompile.PrecompiledScriptDependenciesResolver.EnvironmentProperties.kotlinDslImplicitImports
 import org.gradle.kotlin.dsl.precompile.v1.PrecompiledInitScript
 import org.gradle.kotlin.dsl.precompile.v1.PrecompiledProjectScript
 import org.gradle.kotlin.dsl.precompile.v1.PrecompiledSettingsScript
@@ -40,6 +44,9 @@ import org.gradle.kotlin.dsl.provider.plugins.precompiled.tasks.GenerateExternal
 import org.gradle.kotlin.dsl.provider.plugins.precompiled.tasks.GeneratePrecompiledScriptPluginAccessors
 import org.gradle.kotlin.dsl.provider.plugins.precompiled.tasks.GenerateScriptPluginAdapters
 import org.gradle.kotlin.dsl.provider.plugins.precompiled.tasks.HashedProjectSchema
+import org.gradle.kotlin.dsl.support.ImplicitImports
+import org.gradle.kotlin.dsl.support.listFilesOrdered
+import org.gradle.kotlin.dsl.support.serviceOf
 
 import org.gradle.plugin.devel.GradlePluginDevelopmentExtension
 import org.gradle.plugin.devel.plugins.JavaGradlePluginPlugin
@@ -236,11 +243,48 @@ fun Project.enableScriptCompilationOf(
                 plugins = scriptPlugins
             }
 
-        val configurePrecompiledScriptDependenciesResolver by registering(ConfigurePrecompiledScriptDependenciesResolver::class) {
+        kotlinCompileTask {
             dependsOn(generatePrecompiledScriptPluginAccessors)
-            metadataDir.set(accessorsMetadata)
-            classPathFiles.from(compileClasspath)
-            onConfigure { resolverEnvironment ->
+            inputs.files(compileClasspath).withNormalizer(ClasspathNormalizer::class.java)
+            inputs.dir(accessorsMetadata).withPathSensitivity(PathSensitivity.RELATIVE)
+            inputs.property("kotlinDslScriptTemplates", scriptTemplates)
+
+            val classPathFingerprinter = serviceOf<ClasspathFingerprinter>()
+            val implicitImports = serviceOf<ImplicitImports>()
+
+            doFirst {
+
+                fun metadataDirFile() = accessorsMetadata.get().asFile
+
+                fun precompiledScriptPluginImports(): List<Pair<String, List<String>>> =
+                    metadataDirFile().run {
+                        require(isDirectory)
+                        listFilesOrdered().map {
+                            it.name to it.readLines()
+                        }
+                    }
+
+                fun resolverEnvironmentStringFor(properties: Iterable<Pair<String, List<String>>>): String =
+                    properties.joinToString(separator = ",") { (key, values) ->
+                        "$key=\"${values.joinToString(":")}\""
+                    }
+
+                val precompiledScriptPluginImports = precompiledScriptPluginImports()
+
+                val classPathFingerprintHash = classPathFingerprinter.fingerprint(compileClasspath).hash
+                val sharedAccessorsPackage = "gradle.kotlin.dsl.plugins._$classPathFingerprintHash"
+
+                fun implicitImportsForPrecompiledScriptPlugins(
+                    implicitImports: ImplicitImports
+                ): List<String> =
+                    implicitImports.list + "$sharedAccessorsPackage.*"
+
+                val resolverEnvironment = resolverEnvironmentStringFor(
+                    listOf(
+                        kotlinDslImplicitImports to implicitImportsForPrecompiledScriptPlugins(implicitImports)
+                    ) + precompiledScriptPluginImports
+                )
+
                 applyKotlinCompilerArgs(
                     listOf(
                         "-script-templates", scriptTemplates,
@@ -251,11 +295,24 @@ fun Project.enableScriptCompilationOf(
             }
         }
 
-        kotlinCompileTask {
-            dependsOn(configurePrecompiledScriptDependenciesResolver)
-        }
-
         if (inClassPathMode()) {
+
+            val configurePrecompiledScriptDependenciesResolver by registering(ConfigurePrecompiledScriptDependenciesResolver::class) {
+                dependsOn(generatePrecompiledScriptPluginAccessors)
+                metadataDir.set(accessorsMetadata)
+                classPathFiles.from(compileClasspath)
+                // HERE
+                onConfigure { resolverEnvironment ->
+                    applyKotlinCompilerArgs(
+                        listOf(
+                            "-script-templates", scriptTemplates,
+                            // Propagate implicit imports and other settings
+                            "-Xscript-resolver-environment=$resolverEnvironment"
+                        )
+                    )
+                }
+            }
+
             registerBuildScriptModelTask(
                 configurePrecompiledScriptDependenciesResolver
             )
